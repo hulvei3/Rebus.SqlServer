@@ -138,7 +138,7 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{_t
             {
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = $"SELECT [address] FROM {_tableName.QualifiedName} WHERE [topic] = @topic";
+                    command.CommandText = $"SELECT [address] FROM {_tableName.QualifiedName} WITH (NOLOCK) WHERE [topic] = @topic";
                     command.Parameters.Add("topic", SqlDbType.NVarChar, _topicLength).Value = topic;
 
                     var subscriberAddresses = new List<string>();
