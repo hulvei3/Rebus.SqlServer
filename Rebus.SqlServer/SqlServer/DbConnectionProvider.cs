@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Rebus.Logging;
 using IsolationLevel = System.Data.IsolationLevel;
+using Polly;
 
 #pragma warning disable 1998
 
@@ -63,9 +64,45 @@ namespace Rebus.SqlServer
         }
 
         /// <summary>
-        /// Gets a nice ready-to-use database connection with an open transaction
+        /// Gets a nice ready-to-use database connection with an open transaction,
+        /// If the connection could not be established up to three retrys will be performed.
+        /// </summary>
+        public async Task<IDbConnection> GetConnection( int retryCount )
+        {
+            var backoff = new[]
+            {
+                TimeSpan.FromMilliseconds(100),
+                TimeSpan.FromMilliseconds(400),
+                TimeSpan.FromMilliseconds(1000)
+            };
+
+            var retryPolicy = Policy
+                .Handle<Exception>()
+                .WaitAndRetry(
+                    retryCount,
+                    r => {
+                        // safe gaurd
+                        if ( r > backoff.Length ) return TimeSpan.FromMilliseconds( 1000 );
+                        return backoff[ r - 1 ];
+                    },
+                    ( ex, ts ) => _log.Warn( $"{DateTime.Now.ToString("o")}: Rebus SQL connection timeout! Will rety in {ts.TotalMilliseconds} ms" )
+                );
+
+            return retryPolicy.Execute( () => GetConnectionInner() );
+        }
+
+        /// <summary>
+        /// Gets a nice ready-to-use database connection with an open transaction,
         /// </summary>
         public async Task<IDbConnection> GetConnection()
+        {
+            return GetConnectionInner();
+        }
+
+        /// <summary>
+        /// Gets a nice ready-to-use database connection with an open transaction
+        /// </summary>
+        protected IDbConnection GetConnectionInner()
         {
             SqlConnection connection = null;
 
@@ -73,10 +110,10 @@ namespace Rebus.SqlServer
             {
 
 #if NET45
-                using (new System.Transactions.TransactionScope(System.Transactions.TransactionScopeOption.Suppress))
+                using ( new System.Transactions.TransactionScope( System.Transactions.TransactionScopeOption.Suppress ) )
                 {
-                    connection = new SqlConnection(_connectionString);
-                    
+                    connection = new SqlConnection( _connectionString );
+
                     // do not use Async here! it would cause the tx scope to be disposed on another thread than the one that created it
                     connection.Open();
                 }
@@ -85,11 +122,11 @@ namespace Rebus.SqlServer
                 connection.Open();
 #endif
 
-                var transaction = connection.BeginTransaction(IsolationLevel);
+                var transaction = connection.BeginTransaction( IsolationLevel );
 
-                return new DbConnectionWrapper(connection, transaction, false);
+                return new DbConnectionWrapper( connection, transaction, false );
             }
-            catch (Exception)
+            catch ( Exception )
             {
                 connection?.Dispose();
                 throw;

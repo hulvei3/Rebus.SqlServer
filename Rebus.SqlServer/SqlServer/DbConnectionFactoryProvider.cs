@@ -47,6 +47,19 @@ namespace Rebus.SqlServer
             }
         }
 
+        public Task<IDbConnection> GetConnection( int retryCount )
+        {
+            try
+            {
+                throw new NotImplementedException();
+            }
+            catch ( Exception exception )
+            {
+                _log.Warn( "An error occurred when invoking the provided connection factory: {exception}", exception );
+                throw;
+            }
+        }
+
         /// <summary>
         /// Gets/sets the isolation level used for transactions
         /// </summary>

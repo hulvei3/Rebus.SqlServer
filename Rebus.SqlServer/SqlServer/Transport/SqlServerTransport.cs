@@ -122,7 +122,8 @@ namespace Rebus.SqlServer.Transport
 
         void CreateSchema()
         {
-            using (var connection = _connectionProvider.GetConnection().Result)
+            var connection = _connectionProvider.GetConnection( 3 ).ConfigureAwait( false ).GetAwaiter().GetResult();
+            using ( connection )
             {
                 var tableNames = connection.GetTableNames();
                 
@@ -382,7 +383,8 @@ VALUES
 
             while (true)
             {
-                using (var connection = await _connectionProvider.GetConnection())
+                var connection = _connectionProvider.GetConnection( 3 ).ConfigureAwait( false ).GetAwaiter().GetResult();
+                using ( connection )
                 {
                     int affectedRows;
 
@@ -438,7 +440,8 @@ DELETE FROM TopCTE
                 .GetOrAdd(CurrentConnectionKey,
                     async () =>
                     {
-                        var dbConnection = await _connectionProvider.GetConnection();
+                        var dbConnection = await _connectionProvider.GetConnection( 3 );
+
                         context.OnCommitted(async () => await dbConnection.Complete());
                         context.OnDisposed(() =>
                         {
