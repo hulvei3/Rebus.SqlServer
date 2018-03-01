@@ -147,7 +147,8 @@ namespace Rebus.SqlServer.Transport
 
         async Task InnerEnsureTableIsCreatedAsync(TableName tableName)
         {
-            using (var connection = await ConnectionProvider.GetConnection())
+            var connection = ConnectionProvider.GetConnection( 3 ).ConfigureAwait( false ).GetAwaiter().GetResult();
+            using ( connection )
             {
                 var tableNames = connection.GetTableNames();
 
@@ -457,7 +458,8 @@ VALUES
 
             while (true)
             {
-                using (var connection = await ConnectionProvider.GetConnection())
+                var connection = ConnectionProvider.GetConnection( 3 ).ConfigureAwait( false ).GetAwaiter().GetResult();
+                using ( connection )
                 {
                     int affectedRows;
 
@@ -512,7 +514,7 @@ DELETE FROM TopCTE
                 .GetOrAdd(CurrentConnectionKey,
                     async () =>
                     {
-                        var dbConnection = await ConnectionProvider.GetConnection();
+                        var dbConnection = await ConnectionProvider.GetConnection( 3 );
                         context.OnCommitted(async () => await dbConnection.Complete());
                         context.OnDisposed(() =>
                         {

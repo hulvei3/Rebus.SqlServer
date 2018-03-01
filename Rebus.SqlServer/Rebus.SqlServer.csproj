@@ -48,6 +48,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="rebus" Version="4.0.1" />
+    <PackageReference Include="Polly" Version="5.8.0" />
   </ItemGroup>
   <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard1.6' ">
     <Reference Include="System.Data.Common" />

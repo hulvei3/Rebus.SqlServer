@@ -13,5 +13,11 @@ namespace Rebus.SqlServer
         /// Gets a wrapper with the current <see cref="SqlConnection"/> inside
         /// </summary>
         Task<IDbConnection> GetConnection();
+
+        /// <summary>
+        /// Gets a wrapper with the current <see cref="SqlConnection"/> inside
+        /// If the connection could not be established retrys will be performed according to [<paramref name="retryCount"/>].
+        /// </summary>
+        Task<IDbConnection> GetConnection( int retryCount );
     }
 }
