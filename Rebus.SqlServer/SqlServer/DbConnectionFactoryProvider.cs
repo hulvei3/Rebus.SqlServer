@@ -47,6 +47,9 @@ namespace Rebus.SqlServer
             }
         }
 
+        /// <summary>
+        /// Not implemented.
+        /// </summary>
         public Task<IDbConnection> GetConnection( int retryCount )
         {
             try
