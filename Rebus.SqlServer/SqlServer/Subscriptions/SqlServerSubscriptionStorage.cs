@@ -15,9 +15,11 @@ namespace Rebus.SqlServer.Subscriptions
     /// </summary>
     public class SqlServerSubscriptionStorage : ISubscriptionStorage, IInitializable
     {
+        const int _cacheDurationSeconds = 15;
         readonly IDbConnectionProvider _connectionProvider;
         readonly TableName _tableName;
         readonly ILog _log;
+        readonly Caching.Cache _cache;
 
         int _topicLength = 200;
         int _addressLength = 200;
@@ -38,6 +40,7 @@ namespace Rebus.SqlServer.Subscriptions
             _log = rebusLoggerFactory.GetLogger<SqlServerSubscriptionStorage>();
             _connectionProvider = connectionProvider;
             _tableName = TableName.Parse(tableName);
+            _cache = new Caching.Cache();
         }
 
         /// <summary>
@@ -147,6 +150,11 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{_t
         /// </summary>
         public async Task<string[]> GetSubscriberAddresses(string topic)
         {
+            if(_cache.TryGet(topic, out var addresses))
+            {
+                return (string[])addresses;
+            }
+            
             using (var connection = await _connectionProvider.GetConnection())
             {
                 using (var command = connection.CreateCommand())
@@ -165,7 +173,9 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{_t
                         }
                     }
 
-                    return subscriberAddresses.ToArray();
+                    addresses = subscriberAddresses.ToArray();
+                    _cache.AddOrUpdate(topic, addresses, _cacheDurationSeconds);
+                    return (string[])addresses;
                 }
             }
         }
@@ -194,6 +204,8 @@ END";
 
                 await connection.Complete();
             }
+            
+            _cache.Remove(topic);
         }
 
         void CheckLengths(string topic, string subscriberAddress)
@@ -234,6 +246,8 @@ DELETE FROM {_tableName.QualifiedName} WHERE [topic] = @topic AND [address] = @a
 
                 await connection.Complete();
             }
+            
+            _cache.Remove(topic);
         }
 
         /// <summary>
