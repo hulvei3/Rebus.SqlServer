@@ -26,18 +26,19 @@ namespace Rebus.SqlServer.DataBus
         readonly TableName _tableName;
         readonly bool _ensureTableIsCreated;
         readonly ILog _log;
+        readonly int _commandTimeout ;
 
         /// <summary>
         /// Creates the data storage
         /// </summary>
-        public SqlServerDataBusStorage(IDbConnectionProvider connectionProvider, string tableName, bool ensureTableIsCreated, IRebusLoggerFactory rebusLoggerFactory)
+        public SqlServerDataBusStorage(IDbConnectionProvider connectionProvider, string tableName, bool ensureTableIsCreated, IRebusLoggerFactory rebusLoggerFactory, int commandTimeout)
         {
-            if (connectionProvider == null) throw new ArgumentNullException(nameof(connectionProvider));
             if (tableName == null) throw new ArgumentNullException(nameof(tableName));
             if (rebusLoggerFactory == null) throw new ArgumentNullException(nameof(rebusLoggerFactory));
-            _connectionProvider = connectionProvider;
+            _connectionProvider = connectionProvider ?? throw new ArgumentNullException(nameof(connectionProvider));
             _tableName = TableName.Parse(tableName);
             _ensureTableIsCreated = ensureTableIsCreated;
+            _commandTimeout = commandTimeout;
             _log = rebusLoggerFactory.GetLogger<SqlServerDataBusStorage>();
         }
 
@@ -49,17 +50,48 @@ namespace Rebus.SqlServer.DataBus
         {
             if (!_ensureTableIsCreated) return;
 
-            _log.Info("Creating data bus table {tableName}", _tableName.QualifiedName);
+            try
+            {
+                AsyncHelpers.RunSync(EnsureTableIsCreatedAsync);
+            }
+            catch
+            {
+                // if it failed because of a collision between another thread doing the same thing, just try again once:
+                AsyncHelpers.RunSync(EnsureTableIsCreatedAsync);
+            }
 
-            EnsureTableIsCreated().Wait();
         }
 
-        async Task EnsureTableIsCreated()
+        async Task EnsureTableIsCreatedAsync()
         {
             using (var connection = await _connectionProvider.GetConnection())
             {
+
                 if (connection.GetTableNames().Contains(_tableName))
+                {
+                    var columns = connection.GetColumns(_tableName.Schema, _tableName.Name);
+                    if (!columns.Any(x => x.Name == "CreationTime"))
+                    {
+                        _log.Info("Adding CreationTime column to data bus table {tableName}", _tableName.QualifiedName);
+
+                        using (var command = connection.CreateCommand())
+                        {
+                            command.CommandText = $@"
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'CreationTime' AND Object_ID = Object_ID(N'{_tableName.QualifiedName}'))
+BEGIN
+    ALTER TABLE {_tableName.QualifiedName} ADD [CreationTime] DATETIMEOFFSET
+END
+";
+                            command.ExecuteNonQuery();
+                        }
+
+                        await connection.Complete();
+                    }
+
                     return;
+                }
+
+                _log.Info("Creating data bus table {tableName}", _tableName.QualifiedName);
 
                 using (var command = connection.CreateCommand())
                 {
@@ -74,6 +106,7 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{_t
         [Id] VARCHAR(200),
         [Meta] VARBINARY(MAX),
         [Data] VARBINARY(MAX),
+        [CreationTime] DATETIMEOFFSET,
         [LastReadTime] DATETIMEOFFSET
     );
 
@@ -111,10 +144,12 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{_t
                 {
                     using (var command = connection.CreateCommand())
                     {
-                        command.CommandText = $"INSERT INTO {_tableName.QualifiedName} ([Id], [Meta], [Data]) VALUES (@id, @meta, @data)";
+                        command.CommandTimeout = _commandTimeout;
+                        command.CommandText = $"INSERT INTO {_tableName.QualifiedName} ([Id], [Meta], [Data], [CreationTime]) VALUES (@id, @meta, @data, @now)";
                         command.Parameters.Add("id", SqlDbType.VarChar, 200).Value = id;
                         command.Parameters.Add("meta", SqlDbType.VarBinary).Value = TextEncoding.GetBytes(_dictionarySerializer.SerializeToString(metadataToWrite));
                         command.Parameters.Add("data", SqlDbType.VarBinary).Value = source;
+                        command.Parameters.Add("now", SqlDbType.DateTimeOffset).Value = RebusTime.Now;
 
                         await command.ExecuteNonQueryAsync();
                     }
@@ -144,6 +179,7 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{_t
                 {
                     try
                     {
+                        command.CommandTimeout = _commandTimeout;
                         command.CommandText = $"SELECT TOP 1 [Data] FROM {_tableName.QualifiedName} WITH (NOLOCK) WHERE [Id] = @id";
                         command.Parameters.Add("id", SqlDbType.VarChar, 200).Value = id;
 

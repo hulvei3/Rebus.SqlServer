@@ -6,10 +6,10 @@ using NUnit.Framework;
 using Rebus.Activation;
 using Rebus.Config;
 using Rebus.Logging;
-using Rebus.SqlServer.Transport;
 using Rebus.Tests.Contracts;
 using Rebus.Tests.Contracts.Extensions;
 using Rebus.Tests.Contracts.Utilities;
+// ReSharper disable ArgumentsStyleLiteral
 
 namespace Rebus.SqlServer.Tests.Transport
 {
@@ -31,7 +31,7 @@ namespace Rebus.SqlServer.Tests.Transport
 
             Configure.With(_activator)
                 .Logging(l => l.Use(_loggerFactory))
-                .Transport(t => t.UseSqlServer(SqlTestHelper.ConnectionString, "Messages", queueName))
+                .Transport(t => t.UseSqlServer(SqlTestHelper.ConnectionString, queueName))
                 .Start();
         }
 
