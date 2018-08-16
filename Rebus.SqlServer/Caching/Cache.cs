@@ -9,7 +9,7 @@ namespace Rebus.Caching
     /// <summary>
     /// This is a generic cache subsystem based on key/value pairs, where key is generic, too. Key must be unique.
     /// Every cache entry has its own timeout.
-    /// Cache is thread safe and will delete expired entries on its own using System.Threading.Timers (which run on <see cref="ThreadPool"/> threads).
+    /// Cache is thread safe and will delete expired entries on its own using System.Threading.Timers (which run on  "ThreadPool" threads).
     /// </summary>
     public class Cache<K, T> : IDisposable
     {
@@ -236,7 +236,7 @@ namespace Rebus.Caching
     /// You can add any item to this cache as long as the key is unique, so treat keys as something like namespaces and build them with a 
     /// specific system/syntax in your application.
     /// Every cache entry has its own timeout.
-    /// Cache is thread safe and will delete expired entries on its own using System.Threading.Timers (which run on <see cref="ThreadPool"/> threads).
+    /// Cache is thread safe and will delete expired entries on its own using System.Threading.Timers (which run on "ThreadPool" threads).
     /// </summary>
     public class Cache<T> : Cache<string, T>
     {
