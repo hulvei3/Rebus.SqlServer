@@ -21,7 +21,6 @@ namespace Rebus.Caching
 
         private ConcurrentDictionary<K, T> cache = new ConcurrentDictionary<K, T>();
         private ConcurrentDictionary<K, Timer> timers = new ConcurrentDictionary<K, Timer>();
-        private ReaderWriterLockSlim locker = new ReaderWriterLockSlim();
         #endregion
 
         #region IDisposable implementation & Clear
@@ -51,7 +50,6 @@ namespace Rebus.Caching
                 {
                     // Dispose managed resources.
                     Clear();
-                    locker.Dispose();
                 }
                 // Dispose unmanaged resources
             }
@@ -62,21 +60,16 @@ namespace Rebus.Caching
         /// </summary>
         public void Clear()
         {
-            locker.EnterWriteLock();
             try
             {
-                try
-                {
-                    foreach (Timer t in timers.Values)
-                        t.Dispose();
-                }
-                catch
-                { }
-
-                timers.Clear();
-                cache.Clear();
+                foreach (Timer t in timers.Values)
+                    t.Dispose();
             }
-            finally { locker.ExitWriteLock(); }
+            catch
+            { }
+
+            timers.Clear();
+            cache.Clear();
         }
         #endregion
 
